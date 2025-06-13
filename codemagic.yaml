@@ -36,6 +36,12 @@ workflows:
         script: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
       
+      # Fix gradlew permissions
+      - name: Make gradlew executable
+        script: |
+          cd $CM_BUILD_DIR
+          chmod +x gradlew
+      
       # Dependencies and permissions
       - name: Set up local properties
         script: |
@@ -98,6 +104,10 @@ workflows:
         - pattern: v*.*.*
           include: true
     scripts:
+      - name: Make gradlew executable
+        script: |
+          chmod +x gradlew
+      
       - name: Set up local properties
         script: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
@@ -140,6 +150,10 @@ workflows:
           include: true
           source: true
     scripts:
+      - name: Make gradlew executable
+        script: |
+          chmod +x gradlew
+      
       - name: Build debug APK (unsigned)
         script: |
           ./gradlew assembleDebug
