@@ -1,0 +1,167 @@
+workflows:
+  android-workflow:
+    name: Android Build & Test
+    instance_type: mac_mini_m1
+    max_build_duration: 60
+    environment:
+      android_signing:
+        - keystore_reference
+      groups:
+        - google_play
+      vars:
+        PACKAGE_NAME: "com.emfad.app"
+        GOOGLE_PLAY_TRACK: internal
+      java: 17
+    cache:
+      cache_paths:
+        - ~/.gradle/caches
+        - ~/.android/build-cache
+    triggering:
+      events:
+        - push
+        - tag
+        - pull_request
+      branch_patterns:
+        - pattern: develop
+          include: true
+          source: true
+        - pattern: main
+          include: true
+          source: true
+        - pattern: feature/*
+          include: true
+          source: true
+    scripts:
+      # Pre-build setup
+      - name: Set Android SDK
+        script: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
+      
+      # Dependencies and permissions
+      - name: Set up local properties
+        script: |
+          echo "MAPS_API_KEY=$MAPS_API_KEY" >> "$CM_BUILD_DIR/local.properties"
+      
+      # Build steps
+      - name: Get Flutter packages
+        script: |
+          cd $CM_BUILD_DIR
+          ./gradlew clean
+      
+      - name: Build debug APK
+        script: |
+          ./gradlew assembleDebug
+      
+      # Testing
+      - name: Run unit tests
+        script: |
+          ./gradlew test
+        test_report: app/build/test-results/**/*.xml
+      
+      - name: Run Android lint
+        script: |
+          ./gradlew lintDebug
+        test_report: app/build/reports/lint-results-debug.xml
+      
+      # Optional: Run instrumented tests (requires emulator)
+      - name: Run instrumented tests
+        script: |
+          cd $CM_BUILD_DIR
+          ./gradlew connectedAndroidTest
+        test_report: app/build/outputs/androidTest-results/connected/**/*.xml
+    
+    artifacts:
+      - app/build/outputs/**/*.apk
+      - app/build/outputs/**/mapping.txt
+      - app/build/reports/lint-results-debug.html
+      - app/build/test-results/**/*.xml
+    
+    publishing:
+      email:
+        recipients:
+          - info@emfad.de
+        notify:
+          success: true
+          failure: true
+      slack:
+        channel: '#development'
+        notify_on_build_start: true
+        notify:
+          success: true
+          failure: true
+
+  # Workflow für Release Builds
+  android-release:
+    name: Android Release Build
+    instance_type: mac_mini_m1
+    max_build_duration: 60
+    environment:
+      android_signing:
+        - keystore_reference
+      groups:
+        - google_play
+        - firebase
+      vars:
+        PACKAGE_NAME: "com.emfad.app"
+        GOOGLE_PLAY_TRACK: production
+      java: 17
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: v*.*.*
+          include: true
+    scripts:
+      - name: Set up local properties
+        script: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
+          echo "MAPS_API_KEY=$MAPS_API_KEY" >> "$CM_BUILD_DIR/local.properties"
+      
+      - name: Build release APK
+        script: |
+          ./gradlew assembleRelease
+      
+      - name: Build Android App Bundle
+        script: |
+          ./gradlew bundleRelease
+    
+    artifacts:
+      - app/build/outputs/**/*.apk
+      - app/build/outputs/**/*.aab
+      - app/build/outputs/**/mapping.txt
+    
+    publishing:
+      email:
+        recipients:
+          - info@emfad.de
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: $GOOGLE_PLAY_TRACK
+        submit_as_draft: true
+
+  # Workflow für Feature Branch Tests
+  feature-test:
+    name: Feature Branch Testing
+    instance_type: linux_x2
+    max_build_duration: 30
+    environment:
+      java: 17
+    triggering:
+      events:
+        - pull_request
+      branch_patterns:
+        - pattern: feature/*
+          include: true
+          source: true
+    scripts:
+      - name: Run quick tests
+        script: |
+          ./gradlew test --continue
+      
+      - name: Run lint check
+        script: |
+          ./gradlew lintDebug
+    
+    artifacts:
+      - app/build/reports/lint-results-debug.html
+      - app/build/test-results/**/*.xml
