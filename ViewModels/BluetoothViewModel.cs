@@ -1,0 +1,1 @@
+// BluetoothViewModel.cs Inhalt

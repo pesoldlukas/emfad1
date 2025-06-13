@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">EMFAD Scanner</string>
+    
+    <!-- Fehlermeldungen -->
+    <string name="error_measurement">Messfehler: %1$s</string>
+    <string name="error_calibration">Kalibrierungsfehler: %1$s</string>
+    <string name="error_analysis">Analysefehler: %1$s</string>
+    <string name="error_calibration_point">Fehler beim Hinzufügen des Kalibrierungspunkts: %1$s</string>
+</resources> 

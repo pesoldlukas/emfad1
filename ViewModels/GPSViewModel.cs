@@ -1,0 +1,1 @@
+// GPSViewModel.cs Inhalt

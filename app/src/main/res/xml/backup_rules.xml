@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Backup der Einstellungen -->
+    <include domain="sharedpref" path="."/>
+    
+    <!-- Backup der Messdaten -->
+    <include domain="database" path="."/>
+    <include domain="file" path="."/>
+    
+    <!-- Kein Backup der temporären Dateien -->
+    <exclude domain="file" path="temp/"/>
+    <exclude domain="file" path="cache/"/>
+</full-backup-content> 

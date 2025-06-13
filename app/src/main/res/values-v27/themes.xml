@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.EMFADApp" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- Status- und Navigationsleiste -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        
+        <!-- Fenster-Eigenschaften -->
+        <item name="android:windowBackground">@color/background</item>
+        <item name="android:windowFullscreen">false</item>
+        <item name="android:windowContentOverlay">@null</item>
+        
+        <!-- Material Design Attribute -->
+        <item name="android:colorPrimary">@color/primary</item>
+        <item name="android:colorPrimaryDark">@color/primary_dark</item>
+        <item name="android:colorAccent">@color/accent</item>
+        
+        <!-- Text-Attribute -->
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="android:textColorHint">@color/text_hint</item>
+    </style>
+</resources> 
