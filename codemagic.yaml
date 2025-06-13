@@ -1,16 +1,13 @@
 workflows:
-  android-workflow:
-    name: Android Build & Test
+  # Development workflow for feature branches and debug builds
+  android-debug:
+    name: Android Debug Build & Test
     instance_type: mac_mini_m1
     max_build_duration: 60
     environment:
-      # No signing needed for debug builds
-      groups:
-        - google_play
+      java: 17
       vars:
         PACKAGE_NAME: "com.emfad.app"
-        GOOGLE_PLAY_TRACK: internal
-      java: 17
     cache:
       cache_paths:
         - ~/.gradle/caches
@@ -18,7 +15,6 @@ workflows:
     triggering:
       events:
         - push
-        - tag
         - pull_request
       branch_patterns:
         - pattern: develop
@@ -42,11 +38,6 @@ workflows:
           cd $CM_BUILD_DIR
           chmod +x gradlew
       
-      # Dependencies and permissions
-      - name: Set up local properties
-        script: |
-          echo "MAPS_API_KEY=$MAPS_API_KEY" >> "$CM_BUILD_DIR/local.properties"
-      
       # Build steps
       - name: Clean project
         script: |
@@ -55,13 +46,13 @@ workflows:
       
       - name: Build debug APK
         script: |
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --stacktrace
       
       # Testing
       - name: Run unit tests
         script: |
-          ./gradlew test
-        test_report: app/build/test-results/**/*.xml
+          ./gradlew testDebugUnitTest --continue
+        test_report: app/build/test-results/testDebugUnitTest/TEST-*.xml
       
       - name: Run Android lint
         script: |
@@ -70,7 +61,6 @@ workflows:
     
     artifacts:
       - app/build/outputs/**/*.apk
-      - app/build/outputs/**/mapping.txt
       - app/build/reports/lint-results-debug.html
       - app/build/test-results/**/*.xml
     
@@ -82,20 +72,19 @@ workflows:
           success: true
           failure: true
 
-  # Workflow für Release Builds
+  # Release workflow for tagged releases (requires signing)
   android-release:
     name: Android Release Build
     instance_type: mac_mini_m1
     max_build_duration: 60
     environment:
       android_signing:
-        - android_keystore  # ← Change this to your actual keystore reference name
+        - android_keystore  # This should match your keystore configuration name in Codemagic
       groups:
-        - google_play
-        - firebase
+        - google_play       # This should contain your Google Play credentials
       vars:
         PACKAGE_NAME: "com.emfad.app"
-        GOOGLE_PLAY_TRACK: production
+        GOOGLE_PLAY_TRACK: internal
       java: 17
     triggering:
       events:
@@ -104,22 +93,41 @@ workflows:
         - pattern: v*.*.*
           include: true
     scripts:
+      - name: Set Android SDK
+        script: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
+      
       - name: Make gradlew executable
         script: |
           chmod +x gradlew
       
-      - name: Set up local properties
+      - name: Verify signing configuration
         script: |
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
-          echo "MAPS_API_KEY=$MAPS_API_KEY" >> "$CM_BUILD_DIR/local.properties"
+          if [ -z "$CM_KEYSTORE_PATH" ]; then
+            echo "Error: CM_KEYSTORE_PATH not set"
+            exit 1
+          fi
+          if [ -z "$CM_KEYSTORE_PASSWORD" ]; then
+            echo "Error: CM_KEYSTORE_PASSWORD not set"
+            exit 1
+          fi
+          if [ -z "$CM_KEY_ALIAS" ]; then
+            echo "Error: CM_KEY_ALIAS not set"
+            exit 1
+          fi
+          if [ -z "$CM_KEY_PASSWORD" ]; then
+            echo "Error: CM_KEY_PASSWORD not set"
+            exit 1
+          fi
+          echo "Signing configuration verified"
       
       - name: Build release APK
         script: |
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease --stacktrace
       
       - name: Build Android App Bundle
         script: |
-          ./gradlew bundleRelease
+          ./gradlew bundleRelease --stacktrace
     
     artifacts:
       - app/build/outputs/**/*.apk
@@ -130,14 +138,17 @@ workflows:
       email:
         recipients:
           - info@emfad.de
+        notify:
+          success: true
+          failure: true
       google_play:
         credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
         track: $GOOGLE_PLAY_TRACK
         submit_as_draft: true
 
-  # Workflow für Feature Branch Tests (no signing needed)
-  feature-test:
-    name: Feature Branch Testing
+  # Quick test workflow for pull requests
+  pull-request-test:
+    name: Pull Request Tests
     instance_type: linux_x2
     max_build_duration: 30
     environment:
@@ -145,22 +156,22 @@ workflows:
     triggering:
       events:
         - pull_request
-      branch_patterns:
-        - pattern: feature/*
-          include: true
-          source: true
     scripts:
+      - name: Set Android SDK
+        script: |
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
+      
       - name: Make gradlew executable
         script: |
           chmod +x gradlew
       
-      - name: Build debug APK (unsigned)
+      - name: Build debug APK
         script: |
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --stacktrace
       
-      - name: Run quick tests
+      - name: Run unit tests
         script: |
-          ./gradlew test --continue
+          ./gradlew testDebugUnitTest --continue
       
       - name: Run lint check
         script: |
