@@ -21,21 +21,16 @@ android {
     }
 
     signingConfigs {
+        debug {
+            // Default debug keystore - always available
+        }
         release {
             // Only configure signing if all required environment variables are present
-            if (System.getenv("CM_KEYSTORE_PATH") && 
-                System.getenv("CM_KEYSTORE_PASSWORD") && 
-                System.getenv("CM_KEY_ALIAS") && 
-                System.getenv("CM_KEY_PASSWORD")) {
-                
+            if (hasSigningConfig()) {
                 storeFile file(System.getenv("CM_KEYSTORE_PATH"))
                 storePassword System.getenv("CM_KEYSTORE_PASSWORD")
                 keyAlias System.getenv("CM_KEY_ALIAS")
                 keyPassword System.getenv("CM_KEY_PASSWORD")
-            } else {
-                // For debug builds or when signing config is not available
-                // Use debug signing (this allows the build to complete)
-                println "Warning: Release signing configuration not available, using debug signing"
             }
         }
     }
@@ -45,40 +40,19 @@ android {
             applicationIdSuffix ".debug"
             debuggable true
             minifyEnabled false
-            // Debug builds don't need signing config
+            signingConfig signingConfigs.debug
         }
         release {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             
-            // Only apply signing config if it's properly configured
-            if (System.getenv("CM_KEYSTORE_PATH") && 
-                System.getenv("CM_KEYSTORE_PASSWORD") && 
-                System.getenv("CM_KEY_ALIAS") && 
-                System.getenv("CM_KEY_PASSWORD")) {
+            if (hasSigningConfig()) {
                 signingConfig signingConfigs.release
             } else {
-                // For non-production builds, use debug signing
                 signingConfig signingConfigs.debug
             }
         }
-    }
-
-    // Test options für CI
-    testOptions {
-        unitTests {
-            includeAndroidResources = true
-            returnDefaultValues = true
-        }
-        animationsDisabled = true
-    }
-
-    // Lint options
-    lintOptions {
-        abortOnError false
-        xmlReport true
-        htmlReport true
     }
 
     compileOptions {
@@ -103,25 +77,44 @@ android {
             excludes += '/META-INF/{AL2.0,LGPL2.1}'
         }
     }
+
+    // Test options for CI
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
+            returnDefaultValues = true
+        }
+        animationsDisabled = true
+    }
+
+    // Lint options
+    lint {
+        abortOnError false
+        xmlReport true
+        htmlReport true
+    }
 }
 
 dependencies {
     implementation 'androidx.core:core-ktx:1.12.0'
-    implementation 'androidx.appcompat:appcompat:1.6.1'
-    implementation 'com.google.android.material:material:1.11.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+    implementation 'androidx.activity:activity-compose:1.8.2'
     
-    // Jetpack Compose BOM
+    // Jetpack Compose BOM - this manages all compose versions
     implementation platform('androidx.compose:compose-bom:2024.02.00')
     implementation 'androidx.compose.ui:ui'
     implementation 'androidx.compose.ui:ui-tooling-preview'
     implementation 'androidx.compose.material3:material3'
-    implementation 'androidx.activity:activity-compose:1.8.2'
+    
+    // Navigation Compose - REQUIRED for your MainActivity
     implementation 'androidx.navigation:navigation-compose:2.7.6'
     
-    // ViewModel and LiveData
+    // ViewModel Compose
     implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0'
-    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+    
+    // Optional but recommended
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
     
     // Testing
     testImplementation 'junit:junit:4.13.2'
@@ -133,7 +126,15 @@ dependencies {
     debugImplementation 'androidx.compose.ui:ui-test-manifest'
 }
 
-// Version Code/Name für CI
+// Helper function to check if signing config is available
+def hasSigningConfig() {
+    return System.getenv("CM_KEYSTORE_PATH") && 
+           System.getenv("CM_KEYSTORE_PASSWORD") && 
+           System.getenv("CM_KEY_ALIAS") && 
+           System.getenv("CM_KEY_PASSWORD")
+}
+
+// Version Code/Name for CI
 def getVersionCode() {
     def buildId = System.getenv("CM_BUILD_ID")
     if (buildId != null && buildId.isInteger()) {
