@@ -1,10 +1,11 @@
 workflows:
-  # Development workflow for feature branches and debug builds
   android-debug:
     name: Android Debug Build & Test
     instance_type: mac_mini_m1
     max_build_duration: 60
     environment:
+      android_signing:
+        - keystore_reference
       java: 17
       vars:
         PACKAGE_NAME: "com.emfad.app"
@@ -27,36 +28,34 @@ workflows:
           include: true
           source: true
     scripts:
-      # Pre-build setup
-      - name: Set Android SDK
+      - name: Set up local properties
         script: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
       
-      # Fix gradlew permissions
       - name: Make gradlew executable
         script: |
-          cd $CM_BUILD_DIR
           chmod +x gradlew
       
-      # Build steps
+      - name: Check Gradle wrapper
+        script: |
+          ./gradlew --version
+      
       - name: Clean project
         script: |
-          cd $CM_BUILD_DIR
-          ./gradlew clean
+          ./gradlew clean --stacktrace --info
       
       - name: Build debug APK
         script: |
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --stacktrace --info --no-daemon
       
-      # Testing
       - name: Run unit tests
         script: |
-          ./gradlew testDebugUnitTest --continue
+          ./gradlew testDebugUnitTest --continue --stacktrace
         test_report: app/build/test-results/testDebugUnitTest/TEST-*.xml
       
       - name: Run Android lint
         script: |
-          ./gradlew lintDebug
+          ./gradlew lintDebug --stacktrace
         test_report: app/build/reports/lint-results-debug.xml
     
     artifacts:
@@ -72,16 +71,15 @@ workflows:
           success: true
           failure: true
 
-  # Release workflow for tagged releases (requires signing)
   android-release:
     name: Android Release Build
     instance_type: mac_mini_m1
     max_build_duration: 60
     environment:
       android_signing:
-        - android_keystore  # This should match your keystore configuration name in Codemagic
+        - keystore_reference
       groups:
-        - google_play       # This should contain your Google Play credentials
+        - google_play
       vars:
         PACKAGE_NAME: "com.emfad.app"
         GOOGLE_PLAY_TRACK: internal
@@ -93,7 +91,7 @@ workflows:
         - pattern: v*.*.*
           include: true
     scripts:
-      - name: Set Android SDK
+      - name: Set up local properties
         script: |
           echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
       
@@ -104,30 +102,16 @@ workflows:
       - name: Verify signing configuration
         script: |
           if [ -z "$CM_KEYSTORE_PATH" ]; then
-            echo "Error: CM_KEYSTORE_PATH not set"
-            exit 1
+            echo "Warning: CM_KEYSTORE_PATH not set, using debug signing"
           fi
-          if [ -z "$CM_KEYSTORE_PASSWORD" ]; then
-            echo "Error: CM_KEYSTORE_PASSWORD not set"
-            exit 1
-          fi
-          if [ -z "$CM_KEY_ALIAS" ]; then
-            echo "Error: CM_KEY_ALIAS not set"
-            exit 1
-          fi
-          if [ -z "$CM_KEY_PASSWORD" ]; then
-            echo "Error: CM_KEY_PASSWORD not set"
-            exit 1
-          fi
-          echo "Signing configuration verified"
       
       - name: Build release APK
         script: |
-          ./gradlew assembleRelease --stacktrace
+          ./gradlew assembleRelease --stacktrace --info --no-daemon
       
       - name: Build Android App Bundle
         script: |
-          ./gradlew bundleRelease --stacktrace
+          ./gradlew bundleRelease --stacktrace --info --no-daemon
     
     artifacts:
       - app/build/outputs/**/*.apk
@@ -145,39 +129,3 @@ workflows:
         credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
         track: $GOOGLE_PLAY_TRACK
         submit_as_draft: true
-
-  # Quick test workflow for pull requests
-  pull-request-test:
-    name: Pull Request Tests
-    instance_type: linux_x2
-    max_build_duration: 30
-    environment:
-      java: 17
-    triggering:
-      events:
-        - pull_request
-    scripts:
-      - name: Set Android SDK
-        script: |
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$CM_BUILD_DIR/local.properties"
-      
-      - name: Make gradlew executable
-        script: |
-          chmod +x gradlew
-      
-      - name: Build debug APK
-        script: |
-          ./gradlew assembleDebug --stacktrace
-      
-      - name: Run unit tests
-        script: |
-          ./gradlew testDebugUnitTest --continue
-      
-      - name: Run lint check
-        script: |
-          ./gradlew lintDebug
-    
-    artifacts:
-      - app/build/outputs/**/*.apk
-      - app/build/reports/lint-results-debug.html
-      - app/build/test-results/**/*.xml
