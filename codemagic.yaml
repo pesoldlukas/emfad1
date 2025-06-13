@@ -4,8 +4,7 @@ workflows:
     instance_type: mac_mini_m1
     max_build_duration: 60
     environment:
-      android_signing:
-        - keystore_reference
+      # No signing needed for debug builds
       groups:
         - google_play
       vars:
@@ -43,7 +42,7 @@ workflows:
           echo "MAPS_API_KEY=$MAPS_API_KEY" >> "$CM_BUILD_DIR/local.properties"
       
       # Build steps
-      - name: Get Flutter packages
+      - name: Clean project
         script: |
           cd $CM_BUILD_DIR
           ./gradlew clean
@@ -62,13 +61,6 @@ workflows:
         script: |
           ./gradlew lintDebug
         test_report: app/build/reports/lint-results-debug.xml
-      
-      # Optional: Run instrumented tests (requires emulator)
-      - name: Run instrumented tests
-        script: |
-          cd $CM_BUILD_DIR
-          ./gradlew connectedAndroidTest
-        test_report: app/build/outputs/androidTest-results/connected/**/*.xml
     
     artifacts:
       - app/build/outputs/**/*.apk
@@ -83,12 +75,6 @@ workflows:
         notify:
           success: true
           failure: true
-      slack:
-        channel: '#development'
-        notify_on_build_start: true
-        notify:
-          success: true
-          failure: true
 
   # Workflow für Release Builds
   android-release:
@@ -97,7 +83,7 @@ workflows:
     max_build_duration: 60
     environment:
       android_signing:
-        - keystore_reference
+        - android_keystore  # ← Change this to your actual keystore reference name
       groups:
         - google_play
         - firebase
@@ -139,7 +125,7 @@ workflows:
         track: $GOOGLE_PLAY_TRACK
         submit_as_draft: true
 
-  # Workflow für Feature Branch Tests
+  # Workflow für Feature Branch Tests (no signing needed)
   feature-test:
     name: Feature Branch Testing
     instance_type: linux_x2
@@ -154,6 +140,10 @@ workflows:
           include: true
           source: true
     scripts:
+      - name: Build debug APK (unsigned)
+        script: |
+          ./gradlew assembleDebug
+      
       - name: Run quick tests
         script: |
           ./gradlew test --continue
@@ -163,5 +153,6 @@ workflows:
           ./gradlew lintDebug
     
     artifacts:
+      - app/build/outputs/**/*.apk
       - app/build/reports/lint-results-debug.html
       - app/build/test-results/**/*.xml
