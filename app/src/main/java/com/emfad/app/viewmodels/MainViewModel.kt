@@ -1,206 +1,118 @@
 package com.emfad.app.viewmodels
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.emfad.app.Services.BluetoothService
+import com.emfad.app.Services.LocationService
+import com.emfad.app.Services.MeasurementService
 import com.emfad.app.models.*
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
-data class MainUiState(
-    val currentMode: MeasurementMode = MeasurementMode.BA_VERTICAL,
-    val isMeasuring: Boolean = false,
-    val isCalibrating: Boolean = false,
-    val lastMeasurement: MeasurementResult? = null,
-    val lastCalibration: CalibrationResult? = null,
-    val materialAnalysis: MaterialAnalysisResult? = null,
-    val error: String? = null
-)
+class MainViewModel(application: Application) : AndroidViewModel(application) {
+    private val bluetoothService = BluetoothService(application)
+    private val locationService = LocationService(application)
+    private val measurementService = MeasurementService()
 
-data class MaterialAnalysisResult(
-    val materialType: MaterialType,
-    val materialName: String,
-    val depth: Double,
-    val size: Double,
-    val confidence: Double,
-    val properties: MaterialProperties
-)
+    private val _uiState = MutableStateFlow<UiState>(UiState.Initial)
+    val uiState: StateFlow<UiState> = _uiState
 
-class MainViewModel : ViewModel() {
-    private val _uiState = MutableStateFlow(MainUiState())
-    val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
-    
-    private val measurementController = MeasurementController()
-    private val automaticCalibration = AutomaticCalibration()
-    private val materialDatabase = MaterialDatabase()
-    private val metalAnalyzer = MetalAnalyzer()
-    private val crystalDetector = CrystalDetector()
-    private val clusterAnalyzer = ClusterAnalyzer()
-    private val inclusionDetector = InclusionDetector()
-    
-    fun setMeasurementMode(mode: MeasurementMode) {
+    private val _currentSettings = MutableStateFlow(
+        MeasurementSettings(
+            frequency = 70.0, // kHz
+            mode = MeasurementMode.A,
+            orientation = MeasurementOrientation.HORIZONTAL,
+            autoInterval = null,
+            filterLevel = 0,
+            gain = 1.0,
+            offset = 0.0
+        )
+    )
+    val currentSettings: StateFlow<MeasurementSettings> = _currentSettings
+
+    init {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                currentMode = mode,
-                error = null
-            )
-            measurementController.setMode(mode)
-            automaticCalibration.setMode(mode)
+            combine(
+                bluetoothService.connectionState,
+                bluetoothService.measurementData,
+                locationService.location,
+                measurementService.currentSession,
+                measurementService.currentProfile
+            ) { connectionState, measurementData, location, session, profile ->
+                when (connectionState) {
+                    is BluetoothService.ConnectionState.Connected -> {
+                        measurementData?.let { data ->
+                            // Parse measurement data and update UI
+                            val value = parseMeasurementValue(data)
+                            measurementService.addMeasurement(
+                                value = value,
+                                latitude = location?.latitude,
+                                longitude = location?.longitude
+                            )
+                        }
+                    }
+                    is BluetoothService.ConnectionState.Disconnected -> {
+                        _uiState.value = UiState.Disconnected
+                    }
+                    is BluetoothService.ConnectionState.Error -> {
+                        _uiState.value = UiState.Error(connectionState.message)
+                    }
+                }
+            }.collect()
         }
     }
-    
+
     fun startMeasurement() {
         viewModelScope.launch {
             try {
-                _uiState.value = _uiState.value.copy(
-                    isMeasuring = true,
-                    error = null
+                locationService.startLocationUpdates()
+                measurementService.startNewSession(
+                    name = "Measurement_${System.currentTimeMillis()}",
+                    settings = _currentSettings.value
                 )
-                
-                val result = measurementController.measure()
-                _uiState.value = _uiState.value.copy(
-                    lastMeasurement = result,
-                    isMeasuring = false
-                )
-                
-                // Führe Materialanalyse durch
-                analyzeMaterial(result)
+                _uiState.value = UiState.Measuring
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isMeasuring = false,
-                    error = "Messfehler: ${e.message}"
-                )
+                _uiState.value = UiState.Error(e.message ?: "Unknown error")
             }
         }
     }
-    
-    fun startCalibration() {
+
+    fun stopMeasurement() {
         viewModelScope.launch {
-            try {
-                _uiState.value = _uiState.value.copy(
-                    isCalibrating = true,
-                    error = null
-                )
-                
-                val result = automaticCalibration.calibrate()
-                _uiState.value = _uiState.value.copy(
-                    lastCalibration = result,
-                    isCalibrating = false
-                )
-                
-                if (result.success) {
-                    measurementController.updateConfig(
-                        MeasurementConfig(
-                            mode = result.mode,
-                            frequency = 1000.0, // Standardfrequenz
-                            antennaDistance = 1.0, // Standardabstand
-                            calibrationFactor = result.calibrationFactor,
-                            isCalibrated = true
-                        )
-                    )
-                }
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isCalibrating = false,
-                    error = "Kalibrierungsfehler: ${e.message}"
-                )
-            }
+            locationService.stopLocationUpdates()
+            measurementService.endCurrentSession()
+            _uiState.value = UiState.Connected
         }
     }
-    
-    fun addCalibrationPoint(point: CalibrationPoint) {
-        viewModelScope.launch {
-            try {
-                automaticCalibration.addCalibrationPoint(point)
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    error = "Fehler beim Hinzufügen des Kalibrierungspunkts: ${e.message}"
-                )
-            }
-        }
+
+    fun startNewProfile(profileLength: Double, distance: Double) {
+        measurementService.startNewProfile(
+            name = "Profile_${System.currentTimeMillis()}",
+            profileLength = profileLength,
+            distance = distance
+        )
     }
-    
-    private fun analyzeMaterial(measurement: MeasurementResult) {
-        viewModelScope.launch {
-            try {
-                // 1. Metallanalyse
-                val metalResult = metalAnalyzer.analyzeMetal(
-                    impedanceCurve = listOf(
-                        measurement.frequency to measurement.impedance
-                    ),
-                    frequency = measurement.frequency
-                )
-                
-                // 2. Kristallanalyse
-                val crystalResult = crystalDetector.detectCrystal(
-                    measuredZ = measurement.impedance,
-                    backgroundZ = Complex(377.0, 0.0),
-                    frequency = measurement.frequency,
-                    noiseStdDev = 0.1
-                )
-                
-                // 3. Clusteranalyse
-                val clusterResult = clusterAnalyzer.analyzeClusters(
-                    listOf(
-                        MeasurementPoint(
-                            impedance = measurement.impedance,
-                            conductivity = metalResult.conductivity,
-                            permittivity = crystalResult.permittivity,
-                            permeability = 1.0,
-                            depth = measurement.depth,
-                            position = Point3D(0.0, 0.0, measurement.depth)
-                        )
-                    )
-                )
-                
-                // 4. Einschlussanalyse
-                val inclusionResult = inclusionDetector.detectInclusion(
-                    measuredZ = measurement.impedance,
-                    frequency = measurement.frequency,
-                    depth = measurement.depth,
-                    surroundingMaterial = MaterialProperties(
-                        name = "Erde",
-                        conductivity = 1e-3,
-                        permittivity = Complex(4.0, 0.0),
-                        permeability = 1.0,
-                        density = 1.5,
-                        type = MaterialType.UNKNOWN,
-                        color = "Braun",
-                        typicalDepth = 0.0,
-                        typicalSize = 0.0
-                    )
-                )
-                
-                // Bestimme das wahrscheinlichste Material
-                val material = materialDatabase.findMatchingMaterial(
-                    conductivity = metalResult.conductivity,
-                    permittivity = crystalResult.permittivity,
-                    permeability = 1.0,
-                    density = 2.0 // Standarddichte
-                )
-                
-                if (material != null) {
-                    _uiState.value = _uiState.value.copy(
-                        materialAnalysis = MaterialAnalysisResult(
-                            materialType = material.type,
-                            materialName = material.name,
-                            depth = measurement.depth,
-                            size = material.typicalSize,
-                            confidence = measurement.confidence,
-                            properties = material
-                        )
-                    )
-                }
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    error = "Analysefehler: ${e.message}"
-                )
-            }
-        }
+
+    fun endCurrentProfile() {
+        measurementService.endCurrentProfile()
     }
-    
-    fun clearError() {
-        _uiState.value = _uiState.value.copy(error = null)
+
+    fun updateSettings(settings: MeasurementSettings) {
+        _currentSettings.value = settings
     }
-} 
+
+    private fun parseMeasurementValue(data: ByteArray): Double {
+        // Implement parsing logic based on EMFAD protocol
+        // This is a placeholder implementation
+        return data[0].toDouble()
+    }
+
+    sealed class UiState {
+        object Initial : UiState()
+        object Connected : UiState()
+        object Measuring : UiState()
+        object Disconnected : UiState()
+        data class Error(val message: String) : UiState()
+    }
+}
