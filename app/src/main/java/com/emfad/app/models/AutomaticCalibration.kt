@@ -35,7 +35,7 @@ class AutomaticCalibration {
     
     fun addCalibrationPoint(point: CalibrationPoint) {
         if (point.mode != currentMode) {
-            throw IllegalArgumentException("Kalibrierungspunkt muss zum aktuellen Modus passen")
+            throw IllegalArgumentException("Calibration point must match current mode")
         }
         
         if (calibrationPoints.size >= MAX_CALIBRATION_POINTS) {
@@ -61,10 +61,10 @@ class AutomaticCalibration {
             )
         }
         
-        // 1. Berechne Kalibrierungsfaktor
+        // 1. Calculate calibration factor
         val calibrationFactor = calculateCalibrationFactor()
         
-        // 2. Berechne Zuverlässigkeit
+        // 2. Calculate confidence
         val confidence = calculateCalibrationConfidence(calibrationFactor)
         
         return CalibrationResult(
@@ -76,19 +76,19 @@ class AutomaticCalibration {
     }
     
     private fun calculateCalibrationFactor(): Double {
-        // Berechne durchschnittlichen Kalibrierungsfaktor
+        // Calculate average calibration factor
         val factors = calibrationPoints.map { point ->
             calculatePointCalibrationFactor(point)
         }
         
-        // Entferne Ausreißer
+        // Remove outliers
         val filteredFactors = removeOutliers(factors)
         
         return filteredFactors.average()
     }
     
     private fun calculatePointCalibrationFactor(point: CalibrationPoint): Double {
-        // Berechne Kalibrierungsfaktor für einen einzelnen Punkt
+        // Calculate calibration factor for a single point
         val expectedImpedance = when (point.mode) {
             MeasurementMode.BA_VERTICAL -> Complex(377.0, 0.0)
             MeasurementMode.AB_HORIZONTAL -> Complex(377.0, 0.0)
@@ -111,24 +111,24 @@ class AutomaticCalibration {
     private fun calculateCalibrationConfidence(calibrationFactor: Double): Double {
         var confidence = 0.0
         
-        // 1. Anzahl der Kalibrierungspunkte (30%)
+        // 1. Number of calibration points (30%)
         val pointConfidence = (calibrationPoints.size.toDouble() / MAX_CALIBRATION_POINTS)
             .coerceIn(0.0, 1.0)
         confidence += 0.3 * pointConfidence
         
-        // 2. Streuung der Kalibrierungsfaktoren (30%)
+        // 2. Spread of calibration factors (30%)
         val factors = calibrationPoints.map { calculatePointCalibrationFactor(it) }
         val mean = factors.average()
         val stdDev = sqrt(factors.map { (it - mean).pow(2) }.average())
         val spreadConfidence = (1.0 - stdDev / mean).coerceIn(0.0, 1.0)
         confidence += 0.3 * spreadConfidence
         
-        // 3. Abweichung vom erwarteten Faktor (20%)
+        // 3. Deviation from expected factor (20%)
         val factorDeviation = abs(calibrationFactor - 1.0)
         val factorConfidence = (1.0 - factorDeviation).coerceIn(0.0, 1.0)
         confidence += 0.2 * factorConfidence
         
-        // 4. Frequenzabhängigkeit (20%)
+        // 4. Frequency dependency (20%)
         val frequencies = calibrationPoints.map { it.frequency }
         val freqStdDev = sqrt(frequencies.map { (it - frequencies.average()).pow(2) }.average())
         val freqConfidence = (1.0 - freqStdDev / frequencies.average()).coerceIn(0.0, 1.0)
@@ -142,4 +142,10 @@ class AutomaticCalibration {
     fun clearCalibrationPoints() {
         calibrationPoints.clear()
     }
-} 
+}
+
+data class Point3D(val x: Double, val y: Double, val z: Double)
+
+data class Complex(val real: Double, val imag: Double) {
+    val magnitude: Double get() = kotlin.math.sqrt(real * real + imag * imag)
+}
