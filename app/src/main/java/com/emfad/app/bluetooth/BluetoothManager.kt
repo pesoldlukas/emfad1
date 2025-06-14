@@ -39,12 +39,12 @@ class BluetoothManager(private val context: Context) {
 
     fun startScan() {
         if (!hasRequiredPermissions()) {
-            _connectionState.value = ConnectionState.ERROR("Bluetooth-Berechtigungen fehlen")
+            _connectionState.value = ConnectionState.ERROR("Bluetooth permissions missing")
             return
         }
 
         if (bluetoothAdapter?.isEnabled != true) {
-            _connectionState.value = ConnectionState.ERROR("Bluetooth ist deaktiviert")
+            _connectionState.value = ConnectionState.ERROR("Bluetooth is disabled")
             return
         }
 
@@ -52,26 +52,26 @@ class BluetoothManager(private val context: Context) {
         val devices = mutableListOf<BluetoothDevice>()
 
         try {
-            bluetoothAdapter?.bondedDevices?.forEach { device ->
+            bluetoothAdapter.bondedDevices?.forEach { device ->
                 if (device.name?.contains("EMFAD", ignoreCase = true) == true) {
                     devices.add(device)
                 }
             }
             _availableDevices.value = devices
         } catch (e: SecurityException) {
-            Log.e(TAG, "Berechtigungsfehler beim Scannen: ${e.message}")
-            _connectionState.value = ConnectionState.ERROR("Bluetooth-Berechtigungen fehlen")
+            Log.e(TAG, "Permission error while scanning: ${e.message}")
+            _connectionState.value = ConnectionState.ERROR("Bluetooth permissions missing")
         }
     }
 
     fun connectToDevice(device: BluetoothDevice) {
         if (!hasRequiredPermissions()) {
-            _connectionState.value = ConnectionState.ERROR("Bluetooth-Berechtigungen fehlen")
+            _connectionState.value = ConnectionState.ERROR("Bluetooth permissions missing")
             return
         }
 
         if (bluetoothAdapter?.isEnabled != true) {
-            _connectionState.value = ConnectionState.ERROR("Bluetooth ist deaktiviert")
+            _connectionState.value = ConnectionState.ERROR("Bluetooth is disabled")
             return
         }
 
@@ -83,31 +83,31 @@ class BluetoothManager(private val context: Context) {
             _connectionState.value = ConnectionState.CONNECTED
             startListening()
         } catch (e: IOException) {
-            Log.e(TAG, "Verbindungsfehler: ${e.message}")
-            _connectionState.value = ConnectionState.ERROR(e.message ?: "Unbekannter Fehler")
+            Log.e(TAG, "Connection error: ${e.message}")
+            _connectionState.value = ConnectionState.ERROR(e.message ?: "Unknown error")
             closeConnection()
         } catch (e: SecurityException) {
-            Log.e(TAG, "Berechtigungsfehler: ${e.message}")
-            _connectionState.value = ConnectionState.ERROR("Bluetooth-Berechtigungen fehlen")
+            Log.e(TAG, "Permission error: ${e.message}")
+            _connectionState.value = ConnectionState.ERROR("Bluetooth permissions missing")
             closeConnection()
         }
     }
 
     fun sendData(data: String) {
         if (!hasRequiredPermissions() || _connectionState.value != ConnectionState.CONNECTED) {
-            _connectionState.value = ConnectionState.ERROR("Nicht verbunden oder Berechtigungen fehlen")
+            _connectionState.value = ConnectionState.ERROR("Not connected or permissions missing")
             return
         }
 
         try {
             bluetoothSocket?.outputStream?.write(data.toByteArray())
         } catch (e: IOException) {
-            Log.e(TAG, "Fehler beim Senden: ${e.message}")
-            _connectionState.value = ConnectionState.ERROR("Fehler beim Senden der Daten")
+            Log.e(TAG, "Send error: ${e.message}")
+            _connectionState.value = ConnectionState.ERROR("Error sending data")
             closeConnection()
         } catch (e: SecurityException) {
-            Log.e(TAG, "Berechtigungsfehler beim Senden: ${e.message}")
-            _connectionState.value = ConnectionState.ERROR("Bluetooth-Berechtigungen fehlen")
+            Log.e(TAG, "Permission error while sending: ${e.message}")
+            _connectionState.value = ConnectionState.ERROR("Bluetooth permissions missing")
             closeConnection()
         }
     }
@@ -129,22 +129,22 @@ class BluetoothManager(private val context: Context) {
             while (_connectionState.value == ConnectionState.CONNECTED) {
                 try {
                     if (!hasRequiredPermissions()) {
-                        _connectionState.value = ConnectionState.ERROR("Bluetooth-Berechtigungen fehlen")
+                        _connectionState.value = ConnectionState.ERROR("Bluetooth permissions missing")
                         break
                     }
                     
-                    val bytes = bluetoothSocket?.inputStream?.read(buffer)
-                    if (bytes != null && bytes > 0) {
+                    val bytes = bluetoothSocket?.inputStream?.read(buffer) ?: 0
+                    if (bytes > 0) {
                         val data = String(buffer, 0, bytes)
                         _receivedData.value = data
                     }
                 } catch (e: IOException) {
-                    Log.e(TAG, "Lesefehler: ${e.message}")
-                    _connectionState.value = ConnectionState.ERROR(e.message ?: "Lesefehler")
+                    Log.e(TAG, "Read error: ${e.message}")
+                    _connectionState.value = ConnectionState.ERROR(e.message ?: "Read error")
                     break
                 } catch (e: SecurityException) {
-                    Log.e(TAG, "Berechtigungsfehler: ${e.message}")
-                    _connectionState.value = ConnectionState.ERROR("Bluetooth-Berechtigungen fehlen")
+                    Log.e(TAG, "Permission error: ${e.message}")
+                    _connectionState.value = ConnectionState.ERROR("Bluetooth permissions missing")
                     break
                 }
             }
@@ -157,12 +157,12 @@ class BluetoothManager(private val context: Context) {
                 bluetoothSocket?.close()
             }
         } catch (e: IOException) {
-            Log.e(TAG, "Fehler beim Schließen der Verbindung: ${e.message}")
+            Log.e(TAG, "Error closing connection: ${e.message}")
         } catch (e: SecurityException) {
-            Log.e(TAG, "Berechtigungsfehler beim Schließen: ${e.message}")
+            Log.e(TAG, "Permission error while closing: ${e.message}")
         } finally {
             bluetoothSocket = null
             _connectionState.value = ConnectionState.DISCONNECTED
         }
     }
-} 
+}
