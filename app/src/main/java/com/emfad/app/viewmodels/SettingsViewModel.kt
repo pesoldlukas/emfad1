@@ -1,73 +1,89 @@
 package com.emfad.app.viewmodels
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.emfad.app.models.AnalysisThresholds
+import com.emfad.app.models.MaterialDatabase
+import com.emfad.app.models.MaterialProperties
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-data class SettingsUiState(
-    val frequency: Double = 1000.0,
-    val antennaDistance: Double = 1.0,
-    val measurementAccuracy: Float = 0.8f,
-    val autoCalibration: Boolean = true,
-    val calibrationAccuracy: Float = 0.8f,
-    val metalDetection: Boolean = true,
-    val crystalDetection: Boolean = true,
-    val clusterAnalysis: Boolean = true,
-    val inclusionAnalysis: Boolean = true
-)
+class SettingsViewModel(application: Application) : AndroidViewModel(application) {
+    private val _materialThresholds = MutableStateFlow(AnalysisThresholds())
+    val materialThresholds: StateFlow<AnalysisThresholds> = _materialThresholds
+    
+    private val _crystalDatabase = MutableStateFlow<List<MaterialProperties>>(emptyList())
+    val crystalDatabase: StateFlow<List<MaterialProperties>> = _crystalDatabase
+    
+    private val _veinDatabase = MutableStateFlow<List<MaterialProperties>>(emptyList())
+    val veinDatabase: StateFlow<List<MaterialProperties>> = _veinDatabase
+    
+    private val _structureDatabase = MutableStateFlow<List<MaterialProperties>>(emptyList())
+    val structureDatabase: StateFlow<List<MaterialProperties>> = _structureDatabase
 
-class SettingsViewModel : ViewModel() {
-    private val _uiState = MutableStateFlow(SettingsUiState())
-    val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
-    
-    fun setFrequency(frequency: Double) {
-        _uiState.value = _uiState.value.copy(frequency = frequency)
-    }
-    
-    fun setAntennaDistance(distance: Double) {
-        _uiState.value = _uiState.value.copy(antennaDistance = distance)
-    }
-    
-    fun setMeasurementAccuracy(accuracy: Float) {
-        _uiState.value = _uiState.value.copy(measurementAccuracy = accuracy)
-    }
-    
-    fun setAutoCalibration(enabled: Boolean) {
-        _uiState.value = _uiState.value.copy(autoCalibration = enabled)
-    }
-    
-    fun setCalibrationAccuracy(accuracy: Float) {
-        _uiState.value = _uiState.value.copy(calibrationAccuracy = accuracy)
-    }
-    
-    fun setMetalDetection(enabled: Boolean) {
-        _uiState.value = _uiState.value.copy(metalDetection = enabled)
-    }
-    
-    fun setCrystalDetection(enabled: Boolean) {
-        _uiState.value = _uiState.value.copy(crystalDetection = enabled)
-    }
-    
-    fun setClusterAnalysis(enabled: Boolean) {
-        _uiState.value = _uiState.value.copy(clusterAnalysis = enabled)
-    }
-    
-    fun setInclusionAnalysis(enabled: Boolean) {
-        _uiState.value = _uiState.value.copy(inclusionAnalysis = enabled)
-    }
-    
-    fun saveSettings() {
+    init {
         viewModelScope.launch {
-            // TODO: Einstellungen in SharedPreferences speichern
+            loadMaterialDatabases()
         }
     }
-    
-    fun loadSettings() {
+
+    private fun loadMaterialDatabases() {
+        val db = MaterialDatabase()
+        _crystalDatabase.value = db.getMaterialsByType(MaterialType.CRYSTAL)
+        _veinDatabase.value = db.getMaterialsByType(MaterialType.NATURAL_VEIN)
+        _structureDatabase.value = db.getMaterialsByType(MaterialType.ARTIFICIAL_STRUCTURE)
+    }
+
+    fun updateThresholds(newThresholds: AnalysisThresholds) {
+        _materialThresholds.value = newThresholds
+        // Persist to shared preferences or database
+    }
+
+    fun addCustomMaterial(material: MaterialProperties) {
         viewModelScope.launch {
-            // TODO: Einstellungen aus SharedPreferences laden
+            when (material.type) {
+                MaterialType.CRYSTAL -> {
+                    val updated = _crystalDatabase.value.toMutableList()
+                    updated.add(material)
+                    _crystalDatabase.value = updated
+                }
+                MaterialType.NATURAL_VEIN -> {
+                    val updated = _veinDatabase.value.toMutableList()
+                    updated.add(material)
+                    _veinDatabase.value = updated
+                }
+                MaterialType.ARTIFICIAL_STRUCTURE -> {
+                    val updated = _structureDatabase.value.toMutableList()
+                    updated.add(material)
+                    _structureDatabase.value = updated
+                }
+                else -> {}
+            }
         }
     }
-} 
+
+    fun removeCustomMaterial(material: MaterialProperties) {
+        viewModelScope.launch {
+            when (material.type) {
+                MaterialType.CRYSTAL -> {
+                    _crystalDatabase.value = _crystalDatabase.value.filter { it.name != material.name }
+                }
+                MaterialType.NATURAL_VEIN -> {
+                    _veinDatabase.value = _veinDatabase.value.filter { it.name != material.name }
+                }
+                MaterialType.ARTIFICIAL_STRUCTURE -> {
+                    _structureDatabase.value = _structureDatabase.value.filter { it.name != material.name }
+                }
+                else -> {}
+            }
+        }
+    }
+
+    fun resetToDefaultDatabase() {
+        viewModelScope.launch {
+            loadMaterialDatabases()
+        }
+    }
+}
