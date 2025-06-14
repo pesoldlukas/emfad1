@@ -1,28 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <cloud-backup>
-        <!-- Backup der Einstellungen -->
         <include domain="sharedpref" path="."/>
-        
-        <!-- Backup der Messdaten -->
         <include domain="database" path="."/>
         <include domain="file" path="."/>
-        
-        <!-- Kein Backup der temporären Dateien -->
-        <exclude domain="file" path="temp/"/>
-        <exclude domain="file" path="cache/"/>
+        <exclude domain="sharedpref" path="device.xml"/>
     </cloud-backup>
     
     <device-transfer>
-        <!-- Übertragung der Einstellungen -->
         <include domain="sharedpref" path="."/>
-        
-        <!-- Übertragung der Messdaten -->
         <include domain="database" path="."/>
         <include domain="file" path="."/>
-        
-        <!-- Keine Übertragung der temporären Dateien -->
-        <exclude domain="file" path="temp/"/>
-        <exclude domain="file" path="cache/"/>
+        <exclude domain="sharedpref" path="device.xml"/>
     </device-transfer>
-</data-extraction-rules> 
+</data-extraction-rules>
