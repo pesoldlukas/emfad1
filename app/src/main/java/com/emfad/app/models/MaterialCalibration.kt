@@ -1,114 +1,70 @@
 package com.emfad.app.models
 
-import kotlin.math.*
-
 data class CalibrationData(
     val materialType: MaterialType,
     val depth: Float,
-    val magneticField: Float,
-    val electricField: Float,
-    val frequency: Float,
-    val abValue: Float
+    val value: Float,
+    val frequency: Float
 )
 
 class MaterialCalibration {
     private val calibrationPoints = mutableListOf<CalibrationData>()
-    private var calibrationFactors = mutableMapOf<MaterialType, CalibrationFactors>()
     
     data class CalibrationFactors(
-        val magneticFactor: Float,
-        val electricFactor: Float,
-        val depthFactor: Float,
-        val frequencyFactor: Float
+        val factor: Float,
+        val offset: Float
     )
     
     fun addCalibrationPoint(data: CalibrationData) {
         calibrationPoints.add(data)
-        updateCalibrationFactors()
     }
     
     fun removeCalibrationPoint(data: CalibrationData) {
         calibrationPoints.remove(data)
-        updateCalibrationFactors()
     }
     
     fun getCalibrationFactors(materialType: MaterialType): CalibrationFactors? {
-        return calibrationFactors[materialType]
-    }
-    
-    private fun updateCalibrationFactors() {
-        // Gruppiere Kalibrierungspunkte nach Materialtyp
-        val groupedPoints = calibrationPoints.groupBy { it.materialType }
+        val points = calibrationPoints.filter { it.materialType == materialType }
+        if (points.size < 2) return null
         
-        // Berechne Kalibrierungsfaktoren für jeden Materialtyp
-        groupedPoints.forEach { (materialType, points) ->
-            if (points.size >= 2) {
-                val factors = calculateFactors(points)
-                calibrationFactors[materialType] = factors
-            }
-        }
-    }
-    
-    private fun calculateFactors(points: List<CalibrationData>): CalibrationFactors {
-        // Berechne Durchschnittswerte
-        val avgMagnetic = points.map { it.magneticField }.average().toFloat()
-        val avgElectric = points.map { it.electricField }.average().toFloat()
-        val avgDepth = points.map { it.depth }.average().toFloat()
-        val avgFrequency = points.map { it.frequency }.average().toFloat()
+        // Simple linear calibration: value = factor * raw + offset
+        val sumX = points.sumOf { it.value.toDouble() }
+        val sumY = points.sumOf { it.depth.toDouble() }
+        val sumXY = points.sumOf { it.value * it.depth }
+        val sumX2 = points.sumOf { it.value * it.value }
         
-        // Berechne Standardabweichungen
-        val stdMagnetic = calculateStandardDeviation(points.map { it.magneticField })
-        val stdElectric = calculateStandardDeviation(points.map { it.electricField })
-        val stdDepth = calculateStandardDeviation(points.map { it.depth })
-        val stdFrequency = calculateStandardDeviation(points.map { it.frequency })
+        val n = points.size
+        val factor = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX)
+        val offset = (sumY - factor * sumX) / n
         
-        // Berechne Kalibrierungsfaktoren
-        return CalibrationFactors(
-            magneticFactor = if (stdMagnetic > 0) 1f / stdMagnetic else 1f,
-            electricFactor = if (stdElectric > 0) 1f / stdElectric else 1f,
-            depthFactor = if (stdDepth > 0) 1f / stdDepth else 1f,
-            frequencyFactor = if (stdFrequency > 0) 1f / stdFrequency else 1f
-        )
-    }
-    
-    private fun calculateStandardDeviation(values: List<Float>): Float {
-        val mean = values.average()
-        val variance = values.map { (it - mean) * (it - mean) }.average()
-        return sqrt(variance).toFloat()
+        return CalibrationFactors(factor.toFloat(), offset.toFloat())
     }
     
     fun applyCalibration(
-        measurement: EMFADMeasurement,
+        rawValue: Float,
         materialType: MaterialType
-    ): EMFADMeasurement {
-        val factors = calibrationFactors[materialType] ?: return measurement
-        
-        return measurement.copy(
-            magneticField = measurement.magneticField * factors.magneticFactor,
-            electricField = measurement.electricField * factors.electricFactor,
-            frequency = measurement.frequency * factors.frequencyFactor
-        )
+    ): Float {
+        val factors = getCalibrationFactors(materialType) ?: return rawValue
+        return factors.factor * rawValue + factors.offset
     }
     
     fun getCalibrationQuality(materialType: MaterialType): Float {
         val points = calibrationPoints.filter { it.materialType == materialType }
         if (points.size < 2) return 0f
         
-        // Berechne die Qualität basierend auf der Konsistenz der Messungen
-        val magneticConsistency = calculateConsistency(points.map { it.magneticField })
-        val electricConsistency = calculateConsistency(points.map { it.electricField })
-        val depthConsistency = calculateConsistency(points.map { it.depth })
+        // Calculate R-squared value
+        val factors = getCalibrationFactors(materialType) ?: return 0f
+        val meanY = points.map { it.depth }.average()
         
-        return (magneticConsistency + electricConsistency + depthConsistency) / 3f
+        var ssTotal = 0.0
+        var ssResidual = 0.0
+        
+        for (point in points) {
+            val predicted = factors.factor * point.value + factors.offset
+            ssTotal += (point.depth - meanY) * (point.depth - meanY)
+            ssResidual += (point.depth - predicted) * (point.depth - predicted)
+        }
+        
+        return (1 - (ssResidual / ssTotal)).toFloat().coerceIn(0f, 1f)
     }
-    
-    private fun calculateConsistency(values: List<Float>): Float {
-        if (values.size < 2) return 0f
-        
-        val mean = values.average()
-        val maxDeviation = values.map { abs(it - mean) }.maxOrNull() ?: 0f
-        val range = values.maxOrNull()!! - values.minOrNull()!!
-        
-        return if (range > 0) 1f - (maxDeviation / range) else 1f
-    }
-} 
+}
