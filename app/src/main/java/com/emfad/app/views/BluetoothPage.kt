@@ -3,111 +3,124 @@ package com.emfad.app.views
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.emfad.app.models.EMFADDevice
-import com.emfad.app.viewmodels.BluetoothViewModel
+import com.emfad.app.Services.BluetoothService
+import com.emfad.app.ViewModels.MainViewModel
+import com.emfad.app.bluetooth.EMFADDevice
+import com.emfad.app.bluetooth.MeasurementMode
 
 @Composable
-fun BluetoothPage(
-    viewModel: BluetoothViewModel = viewModel()
-) {
-    val uiState by viewModel.uiState.collectAsState()
-    val isScanning by viewModel.isScanning.collectAsState()
-    val discoveredDevices by viewModel.discoveredDevices.collectAsState()
+fun BluetoothPage(viewModel: MainViewModel) {
+    val bluetoothService = viewModel.bluetoothService
+    val devices by bluetoothService.discoveredDevices.collectAsState()
+    val connectionState by bluetoothService.connectionState.collectAsState()
+    val receivedData by bluetoothService.receivedData.collectAsState()
+
+    LaunchedEffect(Unit) {
+        bluetoothService.startScan()
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // Status-Anzeige
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(
-                    text = "Bluetooth-Status: ${
-                        when (uiState) {
-                            is BluetoothViewModel.BluetoothUiState.Connected -> "Verbunden"
-                            is BluetoothViewModel.BluetoothUiState.Connecting -> "Verbinde..."
-                            is BluetoothViewModel.BluetoothUiState.Disconnected -> "Getrennt"
-                            is BluetoothViewModel.BluetoothUiState.Error -> "Fehler: ${(uiState as BluetoothViewModel.BluetoothUiState.Error).message}"
-                            else -> "Initial"
-                        }
-                    }",
-                    style = MaterialTheme.typography.h6
-                )
-            }
-        }
+        // Connection Status
+        ConnectionStatus(connectionState)
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Device List
+        DeviceList(devices, bluetoothService)
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Received Data
+        ReceivedDataDisplay(receivedData)
+    }
+}
 
-        // Scan-Button
-        Button(
-            onClick = { 
-                if (isScanning) viewModel.stopDeviceScan() else viewModel.startDeviceScan()
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp)
-        ) {
-            Text(if (isScanning) "Scan stoppen" else "Nach Geräten suchen")
-        }
+@Composable
+private fun ConnectionStatus(state: BluetoothService.ConnectionState) {
+    val (text, color) = when (state) {
+        is BluetoothService.ConnectionState.CONNECTED -> "Connected" to MaterialTheme.colorScheme.primary
+        is BluetoothService.ConnectionState.CONNECTING -> "Connecting..." to MaterialTheme.colorScheme.secondary
+        is BluetoothService.ConnectionState.SCANNING -> "Scanning for devices" to MaterialTheme.colorScheme.secondary
+        is BluetoothService.ConnectionState.DISCONNECTED -> "Disconnected" to MaterialTheme.colorScheme.error
+        is BluetoothService.ConnectionState.ERROR -> "Error: ${state.message}" to MaterialTheme.colorScheme.error
+    }
+    
+    Surface(
+        color = color,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(8.dp),
+            color = MaterialTheme.colorScheme.onPrimary
+        )
+    }
+}
 
-        // Geräteliste
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            items(discoveredDevices) { device ->
-                DeviceItem(
-                    device = device,
-                    onConnectClick = { viewModel.connectToDevice(device) }
-                )
-            }
+@Composable
+private fun DeviceList(
+    devices: List<EMFADDevice>,
+    bluetoothService: BluetoothService
+) {
+    Text("Available Devices", style = MaterialTheme.typography.titleMedium)
+    
+    LazyColumn(modifier = Modifier.fillMaxWidth()) {
+        items(devices) { device ->
+            DeviceItem(device, bluetoothService)
         }
     }
 }
 
 @Composable
-private fun DeviceItem(
-    device: EMFADDevice,
-    onConnectClick: () -> Unit
-) {
+private fun DeviceItem(device: EMFADDevice, bluetoothService: BluetoothService) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column {
-                Text(
-                    text = device.name,
-                    style = MaterialTheme.typography.h6
-                )
-                Text(
-                    text = device.address,
-                    style = MaterialTheme.typography.body2
-                )
+                Text(device.name, style = MaterialTheme.typography.bodyLarge)
+                Text(device.address, style = MaterialTheme.typography.bodySmall)
             }
+            
             Button(
-                onClick = onConnectClick,
-                enabled = !device.isConnected
+                onClick = { bluetoothService.connectToDevice(device.bluetoothDevice) }
             ) {
-                Text(if (device.isConnected) "Verbunden" else "Verbinden")
+                Text("Connect")
             }
         }
     }
-} 
+}
+
+@Composable
+private fun ReceivedDataDisplay(data: String) {
+    if (data.isNotEmpty()) {
+        Card(
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Text("Received Data", style = MaterialTheme.typography.titleMedium)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(data)
+            }
+        }
+    }
+}
