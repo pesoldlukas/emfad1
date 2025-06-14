@@ -1,7 +1,14 @@
 package com.emfad.app.data
 
-import androidx.room.*
-import java.util.*
+import androidx.room.Database
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.Query
+import java.util.Date
 
 @Entity(tableName = "measurements")
 data class Measurement(
@@ -44,4 +51,4 @@ abstract class MeasurementDatabase : RoomDatabase() {
             }
         }
     }
-} 
+}
