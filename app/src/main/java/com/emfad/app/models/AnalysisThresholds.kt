@@ -1,7 +1,7 @@
 package com.emfad.app.models
 
 import androidx.datastore.preferences.core.floatPreferencesKey
-import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
 
 data class AnalysisThresholds(
     val magneticFieldMetalThreshold: Float = 50f,
@@ -13,6 +13,6 @@ data class AnalysisThresholds(
         val MAGNETIC_FIELD_THRESHOLD_KEY = floatPreferencesKey("magnetic_field_threshold")
         val ELECTRIC_FIELD_THRESHOLD_KEY = floatPreferencesKey("electric_field_threshold")
         val CONFIDENCE_THRESHOLD_KEY = floatPreferencesKey("confidence_threshold")
-        val TREND_WINDOW_SIZE_KEY = stringPreferencesKey("trend_window_size")
+        val TREND_WINDOW_SIZE_KEY = intPreferencesKey("trend_window_size")
     }
-} 
+}
