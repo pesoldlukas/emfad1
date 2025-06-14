@@ -1,65 +1,39 @@
 package com.emfad.app.models
 
-import java.util.*
+import java.util.Date
 
 data class EMFADMeasurement(
+    val id: String,
     val timestamp: Long,
-    val electricField: Float, // V/m
-    val magneticField: Float, // µT
-    val frequency: Float,     // Hz
+    val frequency: Double,
     val mode: MeasurementMode,
-    val batteryLevel: Int = 100 // Prozent
+    val orientation: MeasurementOrientation,
+    val value: Double,
+    val latitude: Double?,
+    val longitude: Double?
 ) {
-    enum class MeasurementMode { SINGLE, CONTINUOUS, PEAK }
+    enum class MeasurementMode { A, B, A_B, B_A }
+    enum class MeasurementOrientation { HORIZONTAL, VERTICAL }
 
     companion object {
-        fun fromRaw(input: String): EMFADMeasurement? {
-            // Format: "timestamp,electricField,magneticField,frequency,mode,batteryLevel"
+        fun fromBluetoothData(data: ByteArray): EMFADMeasurement? {
+            // Implement your actual Bluetooth data parsing here
             return try {
-                val parts = input.split(",")
+                // Example parsing - adjust to your actual protocol
+                val parts = String(data).split(",")
                 EMFADMeasurement(
-                    timestamp = parts[0].toLong(),
-                    electricField = parts[1].toFloat(),
-                    magneticField = parts[2].toFloat(),
-                    frequency = parts[3].toFloat(),
-                    mode = MeasurementMode.valueOf(parts[4]),
-                    batteryLevel = parts.getOrNull(5)?.toIntOrNull() ?: 100
+                    id = UUID.randomUUID().toString(),
+                    timestamp = System.currentTimeMillis(),
+                    frequency = parts[0].toDouble(),
+                    mode = MeasurementMode.valueOf(parts[1]),
+                    orientation = MeasurementOrientation.valueOf(parts[2]),
+                    value = parts[3].toDouble(),
+                    latitude = null,
+                    longitude = null
                 )
             } catch (e: Exception) {
                 null
             }
         }
     }
-
-    fun toRaw(): String {
-        return "$timestamp,$electricField,$magneticField,$frequency,$mode,$batteryLevel"
-    }
-
-    fun convertToUnit(unit: ElectricFieldUnit): Float {
-        return when (unit) {
-            ElectricFieldUnit.V_PER_M -> electricField
-            ElectricFieldUnit.KV_PER_M -> electricField / 1000
-            ElectricFieldUnit.MV_PER_M -> electricField * 1000
-        }
-    }
-
-    fun convertToUnit(unit: MagneticFieldUnit): Float {
-        return when (unit) {
-            MagneticFieldUnit.MICRO_TESLA -> magneticField
-            MagneticFieldUnit.MILLI_GAUSS -> magneticField * 10
-            MagneticFieldUnit.GAUSS -> magneticField * 0.01f
-        }
-    }
 }
-
-enum class ElectricFieldUnit {
-    V_PER_M,
-    KV_PER_M,
-    MV_PER_M
-}
-
-enum class MagneticFieldUnit {
-    MICRO_TESLA,
-    MILLI_GAUSS,
-    GAUSS
-} 
