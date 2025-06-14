@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.StateFlow
 
 data class EMFADDevice(
     val bluetoothDevice: BluetoothDevice,
-    val name: String = bluetoothDevice.name ?: "Unbekanntes Gerät",
+    val name: String = bluetoothDevice.name ?: "Unknown device",
     val address: String = bluetoothDevice.address,
     val rssi: Int = 0
 ) {
@@ -54,4 +54,4 @@ enum class MeasurementMode {
     NON_FERROUS_METAL,
     CAVITY,
     UNKNOWN
-} 
+}
