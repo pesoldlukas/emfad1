@@ -14,7 +14,7 @@ data class InclusionDetectionResult(
 
 data class InclusionProperties(
     val conductivity: Double,
-    val permittivity: Complex,
+    val permittivity: Double,
     val permeability: Double,
     val density: Double
 )
@@ -39,16 +39,16 @@ class InclusionDetector {
         depth: Double,
         surroundingMaterial: MaterialProperties
     ): InclusionDetectionResult {
-        // 1. Berechne effektive Impedanz
+        // 1. Calculate effective impedance
         val effectiveZ = calculateEffectiveImpedance(measuredZ, frequency, depth)
         
-        // 2. Bestimme Einschlusstyp
+        // 2. Determine inclusion type
         val (inclusionType, properties) = determineInclusionType(effectiveZ, frequency)
         
-        // 3. Berechne Größe
+        // 3. Estimate size
         val size = estimateInclusionSize(effectiveZ, depth, properties)
         
-        // 4. Berechne Zuverlässigkeit
+        // 4. Calculate confidence
         val confidence = calculateConfidence(
             effectiveZ,
             surroundingMaterial,
@@ -74,8 +74,8 @@ class InclusionDetector {
         val omega = 2.0 * PI * frequency
         val k = omega * sqrt(MU_0 * EPSILON_0)
         
-        // Berechne effektive Impedanz nach Mehrschicht-Modell
-        val Z1 = Complex(377.0, 0.0) // Luft-Impedanz
+        // Calculate effective impedance using multilayer model
+        val Z1 = Complex(377.0, 0.0) // Air impedance
         val Z2 = measuredZ
         
         val k2d = k * depth
@@ -91,7 +91,7 @@ class InclusionDetector {
     ): Pair<InclusionType, InclusionProperties> {
         val omega = 2.0 * PI * frequency
         
-        // Berechne Materialeigenschaften aus Impedanz
+        // Calculate material properties from impedance
         val conductivity = calculateConductivity(effectiveZ, omega)
         val permittivity = calculatePermittivity(effectiveZ, omega)
         val permeability = calculatePermeability(effectiveZ, omega)
@@ -105,14 +105,14 @@ class InclusionDetector {
         )
         
         val type = when {
-            // Metall
+            // Metal
             conductivity > 1e6 -> InclusionType.METAL
             
-            // Kristall
-            conductivity < 1e-10 && permittivity.magnitude > 5.0 -> InclusionType.CRYSTAL
+            // Crystal
+            conductivity < 1e-10 && permittivity > 5.0 -> InclusionType.CRYSTAL
             
-            // Hohlraum
-            conductivity < 1e-12 && permittivity.magnitude < 1.1 -> InclusionType.VOID
+            // Void
+            conductivity < 1e-12 && permittivity < 1.1 -> InclusionType.VOID
             
             else -> InclusionType.UNKNOWN
         }
@@ -124,25 +124,21 @@ class InclusionDetector {
         return (z.imag * omega * EPSILON_0) / (z.real * z.real + z.imag * z.imag)
     }
     
-    private fun calculatePermittivity(z: Complex, omega: Double): Complex {
-        val sigma = calculateConductivity(z, omega)
-        return Complex(
-            z.real / (omega * MU_0),
-            -sigma / (omega * EPSILON_0)
-        )
+    private fun calculatePermittivity(z: Complex, omega: Double): Double {
+        return z.real / (omega * MU_0)
     }
     
     private fun calculatePermeability(z: Complex, omega: Double): Double {
         return (z.real * z.real + z.imag * z.imag) / (omega * MU_0)
     }
     
-    private fun estimateDensity(conductivity: Double, permittivity: Complex): Double {
-        // Vereinfachte Schätzung basierend auf Materialeigenschaften
+    private fun estimateDensity(conductivity: Double, permittivity: Double): Double {
+        // Simplified estimation based on material properties
         return when {
-            conductivity > 1e6 -> 8.0..10.0 // Metall
-            conductivity < 1e-10 && permittivity.magnitude > 5.0 -> 2.5..4.0 // Kristall
-            else -> 1.0..2.0 // Hohlraum
-        }.random()
+            conductivity > 1e6 -> 8.0 // Metal
+            conductivity < 1e-10 && permittivity > 5.0 -> 3.0 // Crystal
+            else -> 1.0 // Void
+        }
     }
     
     private fun estimateInclusionSize(
@@ -150,9 +146,9 @@ class InclusionDetector {
         depth: Double,
         properties: InclusionProperties
     ): Double {
-        // Größenabschätzung basierend auf Impedanz und Tiefe
-        val impedanceRatio = effectiveZ.magnitude / 377.0 // Normierung auf Luft-Impedanz
-        return depth * impedanceRatio * (properties.permittivity.magnitude / 10.0)
+        // Size estimation based on impedance and depth
+        val impedanceRatio = effectiveZ.magnitude / 377.0 // Normalized to air impedance
+        return depth * impedanceRatio * (properties.permittivity / 10.0)
     }
     
     private fun calculateConfidence(
@@ -163,22 +159,22 @@ class InclusionDetector {
     ): Double {
         var confidence = 0.0
         
-        // 1. Impedanzkontrast (30%)
+        // 1. Impedance contrast (30%)
         val impedanceContrast = abs(effectiveZ.magnitude - 377.0) / 377.0
         confidence += 0.3 * impedanceContrast.coerceIn(0.0, 1.0)
         
-        // 2. Materialkontrast (30%)
+        // 2. Material contrast (30%)
         val materialContrast = calculateMaterialContrast(
             surroundingMaterial,
             inclusionProperties
         )
         confidence += 0.3 * materialContrast
         
-        // 3. Tiefenabhängigkeit (20%)
+        // 3. Depth dependency (20%)
         val depthConfidence = (1.0 - (depth / 10.0)).coerceIn(0.0, 1.0)
         confidence += 0.2 * depthConfidence
         
-        // 4. Signalstärke (20%)
+        // 4. Signal strength (20%)
         val signalStrength = effectiveZ.magnitude / 1000.0
         confidence += 0.2 * signalStrength.coerceIn(0.0, 1.0)
         
@@ -194,11 +190,17 @@ class InclusionDetector {
         ).coerceIn(0.0, 10.0) / 10.0
         
         val permittivityContrast = abs(
-            surrounding.permittivity.magnitude - inclusion.permittivity.magnitude
+            surrounding.permittivity - inclusion.permittivity
         ).coerceIn(0.0, 10.0) / 10.0
         
         return (conductivityContrast + permittivityContrast) / 2.0
     }
     
     private fun log10(x: Double): Double = kotlin.math.ln(x) / kotlin.math.ln(10.0)
-} 
+}
+
+data class MaterialProperties(
+    val conductivity: Double,
+    val permittivity: Double,
+    val permeability: Double
+)
