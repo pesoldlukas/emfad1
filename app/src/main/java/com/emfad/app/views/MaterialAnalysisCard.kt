@@ -1,89 +1,56 @@
 package com.emfad.app.views
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
+import androidx.compose.material3.Card
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.emfad.app.models.MaterialAnalysis
 import com.emfad.app.models.MaterialType
-import com.emfad.app.models.MaterialClassifier
 
 @Composable
-fun MaterialAnalysisCard(
-    analysis: MaterialAnalysis?,
-    classifier: MaterialClassifier = MaterialClassifier(),
-    modifier: Modifier = Modifier
-) {
+fun MaterialAnalysisCard(analysis: MaterialAnalysis) {
+    val (color, description) = when (analysis.type) {
+        MaterialType.METAL -> Color(0xFFFFD54F) to "Metal Detected"
+        MaterialType.CAVITY -> Color(0xFF81C784) to "Cavity Detected"
+        else -> MaterialTheme.colorScheme.surface to "Unknown Material"
+    }
+    
     Card(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp)
+            .padding(8.dp),
+        colors = CardDefaults.cardColors(containerColor = color)
     ) {
         Column(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
+            modifier = Modifier.padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Materialanalyse",
-                style = MaterialTheme.typography.headlineSmall
+                text = description,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold
             )
             
             Spacer(modifier = Modifier.height(8.dp))
             
-            analysis?.let {
-                val (backgroundColor, textColor) = when (it.type) {
-                    MaterialType.FERROUS_METAL -> Color(0xFFFFA500) to Color.White
-                    MaterialType.NON_FERROUS_METAL -> Color(0xFF4CAF50) to Color.White
-                    MaterialType.CAVITY -> Color(0xFF2196F3) to Color.White
-                    MaterialType.UNKNOWN -> Color.Gray to Color.White
-                }
-                
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(backgroundColor)
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = when (it.type) {
-                                MaterialType.FERROUS_METAL -> "Eisenhaltiges Metall"
-                                MaterialType.NON_FERROUS_METAL -> "Nicht-eisenhaltiges Metall"
-                                MaterialType.CAVITY -> "Hohlraum"
-                                MaterialType.UNKNOWN -> "Unbekanntes Material"
-                            },
-                            color = textColor,
-                            style = MaterialTheme.typography.headlineMedium
-                        )
-                        
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        Text(
-                            text = classifier.getMaterialDescription(it.type),
-                            color = textColor,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        Text(
-                            text = "Zuverlässigkeit: ${(it.confidence * 100).toInt()}%",
-                            color = textColor,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-                }
-            } ?: Text(
-                text = "Keine Analyse verfügbar",
+            Text(
+                text = "Confidence: ${(analysis.confidence * 100).toInt()}%",
                 style = MaterialTheme.typography.bodyLarge
             )
+            
+            analysis.trend?.let {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Trend: ${it.direction} (${(it.strength * 100).toInt()}%)",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
         }
     }
-} 
+}
