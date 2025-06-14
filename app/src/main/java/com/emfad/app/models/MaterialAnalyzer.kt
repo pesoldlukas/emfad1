@@ -29,22 +29,18 @@ class MaterialAnalyzer(private val thresholds: AnalysisThresholds = AnalysisThre
     private val recentAnalyses = mutableListOf<MaterialAnalysis>()
 
     fun analyzeMeasurement(measurement: EMFADMeasurement): MaterialAnalysis {
-        val magneticField = measurement.magneticField
-        val electricField = measurement.electricField
+        // Simplified analysis - use actual sensor values in real implementation
+        val magneticValue = measurement.value
         
-        val metalConfidence = calculateMetalConfidence(magneticField)
-        val cavityConfidence = calculateCavityConfidence(electricField)
+        val metalConfidence = calculateMetalConfidence(magneticValue)
         
-        val analysis = when {
-            metalConfidence > thresholds.confidenceThreshold -> 
-                MaterialAnalysis(MaterialType.METAL, metalConfidence)
-            cavityConfidence > thresholds.confidenceThreshold -> 
-                MaterialAnalysis(MaterialType.CAVITY, cavityConfidence)
-            else -> 
-                MaterialAnalysis(MaterialType.UNKNOWN, 0f)
+        val analysis = if (metalConfidence > thresholds.confidenceThreshold) {
+            MaterialAnalysis(MaterialType.METAL, metalConfidence)
+        } else {
+            MaterialAnalysis(MaterialType.UNKNOWN, 0f)
         }
 
-        // Trendanalyse
+        // Trend analysis
         recentAnalyses.add(analysis)
         if (recentAnalyses.size > thresholds.trendWindowSize) {
             recentAnalyses.removeAt(0)
@@ -54,14 +50,9 @@ class MaterialAnalyzer(private val thresholds: AnalysisThresholds = AnalysisThre
         return analysis.copy(trend = trend)
     }
 
-    private fun calculateMetalConfidence(magneticField: Float): Float {
-        return (magneticField / thresholds.magneticFieldMetalThreshold)
-            .coerceIn(0f, 1f)
-    }
-
-    private fun calculateCavityConfidence(electricField: Float): Float {
-        return (electricField / thresholds.electricFieldCavityThreshold)
-            .coerceIn(0f, 1f)
+    private fun calculateMetalConfidence(magneticValue: Double): Float {
+        return (magneticValue / thresholds.magneticFieldMetalThreshold)
+            .toFloat().coerceIn(0f, 1f)
     }
 
     private fun analyzeTrend(): MaterialTrend? {
@@ -100,4 +91,4 @@ class MaterialAnalyzer(private val thresholds: AnalysisThresholds = AnalysisThre
     fun clearHistory() {
         recentAnalyses.clear()
     }
-} 
+}
